@@ -101,7 +101,6 @@ def connect():
 
     jar_path = os.path.join(
         os.getcwd(),
-        "drivers",
         "db2jcc4.jar"
     )
 
