@@ -100,9 +100,9 @@ def clean_exid(series):
         .str.strip()
     )
 
-# ================================
+# ================================#
 # CONNECTION
-# ================================
+# ================================#
 def connect():
 
     jar_path = os.path.join(
@@ -124,19 +124,26 @@ def connect():
         os.environ["PATH"]
     )
 
+    if not os.path.exists(jar_path):
+        raise FileNotFoundError(
+            f"DB2 driver not found at: {jar_path}"
+        )
+
     if not jpype.isJVMStarted():
 
         jpype.startJVM(
             jpype.getDefaultJVMPath(),
             "-Xmx2g",
-            f"-Djava.class.path={jar_path}"
+            classpath=[jar_path]
         )
+
+    print("JVM STARTED:", jpype.isJVMStarted())
 
     conn = jaydebeapi.connect(
         "com.ibm.db2.jcc.DB2Driver",
         "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
         ["m509psao", os.getenv("DB_PASSWORD")],
-        jar_path
+        jars=jar_path
     )
 
     return conn
