@@ -99,7 +99,11 @@ def clean_exid(series):
 # ================================#
 def connect():
 
-    jar_path = r"C:\db2\db2jcc4.jar"
+    jar_path = os.path.join(
+        os.getcwd(),
+        "drivers",
+        "db2jcc4.jar"
+    )
 
     print("CURRENT DIR:", os.getcwd())
     print("JAR PATH:", jar_path)
