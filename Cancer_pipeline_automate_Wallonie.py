@@ -103,10 +103,13 @@ def clean_exid(series):
 # ================================#
 # CONNECTION
 # ================================#
-
 def connect():
 
     jar_path = r"C:\db2\db2jcc4.jar"
+
+    print("CURRENT DIR:", os.getcwd())
+    print("JAR PATH:", jar_path)
+    print("JAR EXISTS:", os.path.exists(jar_path))
 
     java_home = r"C:\Program Files\Java\jdk-17"
 
@@ -134,6 +137,7 @@ def connect():
     )
 
     return conn
+
 
 conn = connect()
 
@@ -286,6 +290,18 @@ print("POP UNIQUE EXID:", pop["EXID"].nunique())
 # ================================#
 # BASE
 # ================================#
+df["EXID"] = (
+    df["EXID"]
+    .astype(str)
+    .str.strip()
+)
+
+pop["EXID"] = (
+    pop["EXID"]
+    .astype(str)
+    .str.strip()
+)
+
 base = pop.merge(
     df,
     on="EXID",
@@ -514,11 +530,9 @@ paper_send_total.to_excel(
     index=False
 )
 
-
 print("Export Wallonie completed successfully.")
 
 # ================================#
 # CLOSE CONNECTION
 # ================================#
-
 conn.close()

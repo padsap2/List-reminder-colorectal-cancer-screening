@@ -15,9 +15,9 @@ warnings.filterwarnings("ignore")
 
 load_dotenv(find_dotenv())
 
-# ================================
+# ================================#
 # CONFIG
-# ================================
+# ================================#
 campaign_year = 2026
 campaign_month = 4
 
@@ -63,9 +63,9 @@ print("Campaign month:", campaign_month)
 print("Data month:", data_month)
 print("DB snapshot month:", today.month)
 
-# ================================
+# ================================#
 # HELPERS
-# ================================
+# ================================#
 def anatella_cast(series):
 
     return (
@@ -94,12 +94,16 @@ def clean_exid(series):
         .str.strip()
     )
 
-# ================================
+# ================================#
 # CONNECTION
-# ================================
+# ================================#
 def connect():
 
     jar_path = r"C:\db2\db2jcc4.jar"
+
+    print("CURRENT DIR:", os.getcwd())
+    print("JAR PATH:", jar_path)
+    print("JAR EXISTS:", os.path.exists(jar_path))
 
     java_home = r"C:\Program Files\Java\jdk-17"
 
@@ -249,6 +253,18 @@ print("POP:", len(pop))
 # ================================
 # BASE
 # ================================
+df["EXID"] = (
+    df["EXID"]
+    .astype(str)
+    .str.strip()
+)
+
+pop["EXID"] = (
+    pop["EXID"]
+    .astype(str)
+    .str.strip()
+)
+
 base = pop.merge(
     df,
     on="EXID",
