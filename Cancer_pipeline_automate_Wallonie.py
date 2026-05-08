@@ -477,7 +477,7 @@ print("  -- NOT READ:", len(not_read))
 # ================================
 # EXPORT
 # ================================
-export_path = r"C:\Users\M509PSAO\Desktop\EXIDs"
+export_path = r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening"
 
 visited_month.to_excel(
     os.path.join(
