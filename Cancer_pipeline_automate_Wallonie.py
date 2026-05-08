@@ -144,7 +144,7 @@ def connect():
     conn = jaydebeapi.connect(
         "com.ibm.db2.jcc.DB2Driver",
         "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
-        ["m509psao", os.getenv("DB_PASSWORD")],
+        ["m509psao", "Oong)ieVoh1W"],
         jars=jar_path
     )
 
