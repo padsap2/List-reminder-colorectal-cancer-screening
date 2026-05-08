@@ -9,18 +9,16 @@ from datetime import datetime
 # ================================
 # CONFIG
 # ================================
-base_dir = os.path.dirname(os.path.abspath(__file__))
-
-OUTPUT_FOLDER = os.path.join(
-    base_dir,
-    "output_files"
+OUTPUT_FOLDER = (
+    r"G:\Studies\Cellule Etudes\Reporting\Marketing"
+    r"\List reminder colorectal cancer screening"
 )
 
 SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
 
-EMAIL_ADDRESS = os.environ.get("patrice.sapalo@partenamut.be")
-EMAIL_PASSWORD = os.environ.get("anderlecht!3")
+EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 
 RECIPIENTS = [
     "patrice.sapalo@partenamut.be"
@@ -109,7 +107,7 @@ for file in files:
 # ================================
 print("ABOUT TO SEND MAIL")
 
-with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=60) as server:
 
     server.starttls()
 
