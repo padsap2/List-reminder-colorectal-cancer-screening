@@ -1,145 +1,100 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": 2,
-   "id": "76cf7fb3",
-   "metadata": {},
-   "outputs": [
-    {
-     "name": "stdout",
-     "output_type": "stream",
-     "text": [
-      "Attached: Brussels_eBox_Send_05_2026.xlsx\n",
-      "Attached: Brussels_Paper_Send_05_2026.xlsx\n",
-      "Attached: Wallonie_eBox_Send_05_2026.xlsx\n",
-      "Attached: Wallonie_Paper_Send_05_2026.xlsx\n",
-      "\n",
-      "Mail sent successfully.\n"
-     ]
-    }
-   ],
-   "source": [
-    "import os\n",
-    "\n",
-    "import win32com.client as win32\n",
-    "\n",
-    "from datetime import datetime\n",
-    "\n",
-    "# ================================\n",
-    "# CONFIG\n",
-    "# ================================\n",
-    "OUTPUT_FOLDER = (\n",
-    "    r\"G:\\Studies\\Cellule Etudes\\Reporting\\Marketing\"\n",
-    "    r\"\\List reminder colorectal cancer screening\"\n",
-    ")\n",
-    "\n",
-    "RECIPIENTS = [\n",
-    "    \"patrice.sapalo@partenamut.be\"\n",
-    "]\n",
-    "\n",
-    "# ================================\n",
-    "# AUTO DATE\n",
-    "# ================================\n",
-    "today = datetime.today()\n",
-    "\n",
-    "campaign_month = today.month\n",
-    "campaign_year = today.year\n",
-    "\n",
-    "# ================================\n",
-    "# FILES\n",
-    "# ================================\n",
-    "files = [\n",
-    "\n",
-    "    f\"Brussels_eBox_Send_{campaign_month:02d}_{campaign_year}.xlsx\",\n",
-    "\n",
-    "    f\"Brussels_Paper_Send_{campaign_month:02d}_{campaign_year}.xlsx\",\n",
-    "\n",
-    "    f\"Wallonie_eBox_Send_{campaign_month:02d}_{campaign_year}.xlsx\",\n",
-    "\n",
-    "    f\"Wallonie_Paper_Send_{campaign_month:02d}_{campaign_year}.xlsx\"\n",
-    "]\n",
-    "\n",
-    "# ================================\n",
-    "# OUTLOOK\n",
-    "# ================================\n",
-    "outlook = win32.Dispatch(\n",
-    "    \"Outlook.Application\"\n",
-    ")\n",
-    "\n",
-    "mail = outlook.CreateItem(0)\n",
-    "\n",
-    "mail.To = \";\".join(RECIPIENTS)\n",
-    "\n",
-    "mail.Subject = (\n",
-    "    f\"CRC Screening Lists \"\n",
-    "    f\"{campaign_month:02d}/{campaign_year}\"\n",
-    ")\n",
-    "\n",
-    "mail.Body = f\"\"\"\n",
-    "Hello,\n",
-    "\n",
-    "Please find attached the colorectal cancer screening files\n",
-    "for {campaign_month:02d}/{campaign_year}.\n",
-    "\n",
-    "Included:\n",
-    "\n",
-    "- Brussels eBox\n",
-    "- Brussels Paper\n",
-    "- Wallonie eBox\n",
-    "- Wallonie Paper\n",
-    "\n",
-    "Generated automatically.\n",
-    "\"\"\"\n",
-    "\n",
-    "# ================================\n",
-    "# ATTACH FILES\n",
-    "# ================================\n",
-    "for file in files:\n",
-    "\n",
-    "    filepath = os.path.join(\n",
-    "        OUTPUT_FOLDER,\n",
-    "        file\n",
-    "    )\n",
-    "\n",
-    "    if os.path.exists(filepath):\n",
-    "\n",
-    "        mail.Attachments.Add(filepath)\n",
-    "\n",
-    "        print(f\"Attached: {file}\")\n",
-    "\n",
-    "    else:\n",
-    "\n",
-    "        print(f\"Missing file: {file}\")\n",
-    "\n",
-    "# ================================\n",
-    "# SEND\n",
-    "# ================================\n",
-    "mail.Send()\n",
-    "\n",
-    "print(\"\\nMail sent successfully.\")"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": ".venv (3.11.9)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.11.9"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+print("STARTING MAIL SCRIPT")
+
+import os
+import win32com.client as win32
+from datetime import datetime
+
+# ================================
+# CONFIG
+# ================================
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+OUTPUT_FOLDER = os.path.join(
+    base_dir,
+    "output_files"
+)
+
+RECIPIENTS = [
+    "patrice.sapalo@partenamut.be"
+]
+
+# ================================
+# AUTO DATE
+# ================================
+today = datetime.today()
+
+campaign_month = today.month
+campaign_year = today.year
+
+# ================================
+# FILES
+# ================================
+files = [
+
+    f"Brussels_eBox_Send_{campaign_month:02d}_{campaign_year}.xlsx",
+
+    f"Brussels_Paper_Send_{campaign_month:02d}_{campaign_year}.xlsx",
+
+    f"Wallonie_eBox_Send_{campaign_month:02d}_{campaign_year}.xlsx",
+
+    f"Wallonie_Paper_Send_{campaign_month:02d}_{campaign_year}.xlsx"
+]
+
+# ================================
+# OUTLOOK
+# ================================
+outlook = win32.Dispatch("Outlook.Application")
+
+mail = outlook.CreateItem(0)
+
+mail.To = ";".join(RECIPIENTS)
+
+mail.Subject = (
+    f"CRC Screening Lists "
+    f"{campaign_month:02d}/{campaign_year}"
+)
+
+mail.Body = f"""
+Hello,
+
+Please find attached the colorectal cancer screening files
+for {campaign_month:02d}/{campaign_year}.
+
+Included:
+
+- Brussels eBox
+- Brussels Paper
+- Wallonie eBox
+- Wallonie Paper
+
+Generated automatically.
+"""
+
+# ================================
+# ATTACH FILES
+# ================================
+for file in files:
+
+    filepath = os.path.join(
+        OUTPUT_FOLDER,
+        file
+    )
+
+    if os.path.exists(filepath):
+
+        mail.Attachments.Add(filepath)
+
+        print(f"Attached: {file}")
+
+    else:
+
+        print(f"Missing file: {file}")
+
+# ================================
+# SEND
+# ================================
+print("ABOUT TO SEND MAIL")
+
+mail.Send()
+
+print("MAIL SENT")
