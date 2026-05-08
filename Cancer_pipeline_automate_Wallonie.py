@@ -313,6 +313,20 @@ gc.collect()
 print("BASE:", len(base))
 
 # ================================
+# OPT OUT COUNT
+# ================================
+opted_out_count = (
+    pd.to_numeric(
+        base["OPT_OUT_FLAG"],
+        errors="coerce"
+    ) == 1
+).sum()
+
+print("OPTED OUT MEMBERS:", opted_out_count)
+
+
+
+# ================================
 # BIRTH MONTH
 # ================================
 base["MOIS_NAISS"] = (
@@ -457,6 +471,7 @@ paper_send_total = pd.concat([
 print("\n================ VALIDATION ================")
 
 print("BASE:", len(base))
+print("OPTED OUT:", opted_out_count)
 print("eBox send:", len(visited_month))
 print("Paper send:", len(paper_send_total))
 print("  -- NO EBOX:", len(not_visited_month))
