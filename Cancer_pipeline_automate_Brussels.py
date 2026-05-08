@@ -101,7 +101,7 @@ def connect():
 
     jar_path = r"C:\db2\db2jcc4.jar"
 
-    java_home = r"C:\Program Files\temurin-jre-21"
+    java_home = r"C:\Program Files\Java\jdk-17"
 
     os.environ["JAVA_HOME"] = java_home
 
