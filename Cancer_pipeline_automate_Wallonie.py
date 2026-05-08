@@ -107,10 +107,20 @@ def connect():
 
     jar_path = r"C:\db2\db2jcc4.jar"
 
+    java_home = r"C:\Program Files\temurin-jre-21"
+
+    os.environ["JAVA_HOME"] = java_home
+
+    os.environ["PATH"] = (
+        java_home + r"\bin;" +
+        java_home + r"\bin\server;" +
+        os.environ["PATH"]
+    )
+
     if not jpype.isJVMStarted():
 
         jpype.startJVM(
-            r"C:\Program Files\temurin-jre-21\bin\server\jvm.dll",
+            java_home + r"\bin\server\jvm.dll",
             "-Xmx2g",
             "-Djava.class.path=" + jar_path
         )
@@ -255,7 +265,10 @@ pop_files = [
 # LOAD + APPEND FILES
 # ================================
 pop = pd.concat(
-    [pd.read_excel(file, usecols=["EXID"]) for file in pop_files],
+    [
+        pd.read_excel(file, usecols=["EXID"])
+        for file in pop_files
+    ],
     ignore_index=True
 )
 
@@ -505,5 +518,3 @@ print("Export Wallonie completed successfully.")
 # CLOSE CONNECTION
 # ================================
 conn.close()
-
-
