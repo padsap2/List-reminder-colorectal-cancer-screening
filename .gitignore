@@ -1,7 +1,21 @@
+# Virtual environment
 .venv/
-.env
-outputs/
-logs/
+
+# Jupyter notebooks
+*.ipynb
+
+# Python cache
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
+
+# Env variables
+.env
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Excel temporary files
+~$*.xlsx
