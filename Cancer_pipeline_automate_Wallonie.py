@@ -1,572 +1,509 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": 1,
-   "id": "4f123add",
-   "metadata": {},
-   "outputs": [
-    {
-     "name": "stdout",
-     "output_type": "stream",
-     "text": [
-      "\n",
-      "================ CONFIG: Wallonie ================\n",
-      "Campaign month: 4\n",
-      "Data month: 3\n",
-      "DB snapshot month: 5\n",
-      "\n",
-      "Loading optimized DB query...\n",
-      "DB FINAL: 795405\n",
-      "UNIQUE EXID: 795405\n",
-      "POP TOTAL: 46451\n",
-      "POP UNIQUE EXID: 46451\n",
-      "BASE: 46170\n",
-      "MyMut count: 780298\n",
-      "READ count: 898889\n",
-      "NOT READ count: 1676\n",
-      "NOT VISITED: 1459\n",
-      "VISITED: 2515\n",
-      "\n",
-      "================ VALIDATION ================\n",
-      "BASE: 46170\n",
-      "eBox send: 2515\n",
-      "Paper send: 3135\n",
-      "  -- NO EBOX: 1459\n",
-      "  -- NOT READ: 1676\n",
-      "Export Wallonie completed successfully.\n"
-     ]
-    }
-   ],
-   "source": [
-    "import os\n",
-    "os.environ[\"OPENBLAS_NUM_THREADS\"] = \"1\"\n",
-    "\n",
-    "import pandas as pd\n",
-    "import jaydebeapi\n",
-    "import jpype\n",
-    "import gc\n",
-    "\n",
-    "from datetime import datetime\n",
-    "from dateutil.relativedelta import relativedelta\n",
-    "from dotenv import load_dotenv, find_dotenv\n",
-    "\n",
-    "import warnings\n",
-    "warnings.filterwarnings(\"ignore\")\n",
-    "\n",
-    "load_dotenv(find_dotenv())\n",
-    "\n",
-    "# ================================\n",
-    "# CONFIG\n",
-    "# ================================\n",
-    "campaign_year = 2026\n",
-    "campaign_month = 4\n",
-    "\n",
-    "data_date = datetime(\n",
-    "    campaign_year,\n",
-    "    campaign_month,\n",
-    "    1\n",
-    ") - relativedelta(months=1)\n",
-    "\n",
-    "data_month = data_date.month\n",
-    "data_year = data_date.year\n",
-    "\n",
-    "start_of_month = datetime(data_year, data_month, 1)\n",
-    "\n",
-    "end_of_month = (\n",
-    "    start_of_month\n",
-    "    + relativedelta(months=1)\n",
-    "    - relativedelta(days=1)\n",
-    ")\n",
-    "\n",
-    "start_ts = start_of_month.strftime(\"%Y-%m-%d 00:00:00\")\n",
-    "end_ts = end_of_month.strftime(\"%Y-%m-%d 23:59:59\")\n",
-    "\n",
-    "today = datetime.today()\n",
-    "\n",
-    "current_start = datetime(\n",
-    "    today.year,\n",
-    "    today.month,\n",
-    "    1\n",
-    ")\n",
-    "\n",
-    "current_end = (\n",
-    "    current_start\n",
-    "    + relativedelta(months=1)\n",
-    "    - relativedelta(days=1)\n",
-    ")\n",
-    "\n",
-    "current_next = (\n",
-    "    current_start\n",
-    "    + relativedelta(months=1)\n",
-    ")\n",
-    "\n",
-    "vpodsa_date_current = current_end.strftime(\"%Y%m%d\")\n",
-    "vpadsa_next_current = current_next.strftime(\"%Y%m%d\")\n",
-    "\n",
-    "print(\"\\n================ CONFIG: Wallonie ================\")\n",
-    "print(\"Campaign month:\", campaign_month)\n",
-    "print(\"Data month:\", data_month)\n",
-    "print(\"DB snapshot month:\", today.month)\n",
-    "\n",
-    "# ================================\n",
-    "# HELPERS\n",
-    "# ================================\n",
-    "def anatella_cast(series):\n",
-    "\n",
-    "    return (\n",
-    "        pd.to_numeric(series, errors=\"coerce\")\n",
-    "        .dropna()\n",
-    "        .astype(\"int64\")\n",
-    "        .astype(str)\n",
-    "    )\n",
-    "\n",
-    "def normalize_exid(x):\n",
-    "\n",
-    "    if pd.isna(x):\n",
-    "        return None\n",
-    "\n",
-    "    try:\n",
-    "        return str(int(str(x).strip()))\n",
-    "    except:\n",
-    "        return None\n",
-    "\n",
-    "def clean_exid(series):\n",
-    "\n",
-    "    return (\n",
-    "        series.apply(\n",
-    "            lambda x: ''.join(x) if isinstance(x, tuple) else str(x)\n",
-    "        )\n",
-    "        .str.strip()\n",
-    "    )\n",
-    "\n",
-    "# ================================\n",
-    "# CONNECTION\n",
-    "# ================================\n",
-    "def connect():\n",
-    "\n",
-    "    jar_path = r\"C:\\db2\\db2jcc4.jar\"\n",
-    "\n",
-    "    if not jpype.isJVMStarted():\n",
-    "\n",
-    "        jpype.startJVM(\n",
-    "            jpype.getDefaultJVMPath(),\n",
-    "            \"-Xmx2g\",\n",
-    "            \"-Djava.class.path=\" + jar_path\n",
-    "        )\n",
-    "\n",
-    "    conn = jaydebeapi.connect(\n",
-    "        \"com.ibm.db2.jcc.DB2Driver\",\n",
-    "        \"jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500\",\n",
-    "        [\"m509psao\", os.getenv(\"DB_PASSWORD\")]\n",
-    "    )\n",
-    "\n",
-    "    return conn\n",
-    "\n",
-    "conn = connect()\n",
-    "\n",
-    "# ================================\n",
-    "# DB QUERY (OPTIMIZED)\n",
-    "# ================================\n",
-    "query = f\"\"\"\n",
-    "WITH BASE AS (\n",
-    "\n",
-    "    SELECT\n",
-    "\n",
-    "        TRIM(p.EXIDSA) AS EXID,\n",
-    "\n",
-    "        SMALLINT(p.PROVSA) AS PROVSA,\n",
-    "\n",
-    "        v.VPV1SV,\n",
-    "\n",
-    "        p.NAIDSA,\n",
-    "\n",
-    "        SMALLINT(\n",
-    "            CASE\n",
-    "                WHEN s.EXIDSA IS NOT NULL THEN 1\n",
-    "                ELSE 0\n",
-    "            END\n",
-    "        ) AS OPT_OUT_FLAG,\n",
-    "\n",
-    "        ROW_NUMBER() OVER (\n",
-    "            PARTITION BY p.EXIDSA\n",
-    "            ORDER BY p.EXIDSA\n",
-    "        ) AS RN\n",
-    "\n",
-    "    FROM ODS509.ODS_PSTATA p\n",
-    "\n",
-    "    LEFT JOIN ODS509.ODS_PSTATV v\n",
-    "        ON p.EXIDSA = v.EXIDSV\n",
-    "\n",
-    "    LEFT JOIN (\n",
-    "\n",
-    "        SELECT DISTINCT\n",
-    "            REPLACE(TARGETID, ',', '') AS EXIDSA\n",
-    "\n",
-    "        FROM ODS509.V_ISE_ODS_WWWSIGNAL\n",
-    "\n",
-    "        WHERE SIGNALID = 'CampagneCC'\n",
-    "          AND INACTIVE = 0\n",
-    "\n",
-    "    ) s\n",
-    "        ON p.EXIDSA = s.EXIDSA\n",
-    "\n",
-    "    WHERE (\n",
-    "\n",
-    "        p.VPODSA >= {vpodsa_date_current}\n",
-    "\n",
-    "        AND p.VPACSA <> 'O'\n",
-    "\n",
-    "        AND (\n",
-    "            (\n",
-    "                p.VPACSA = 'T'\n",
-    "                AND p.VPADSA <= {vpadsa_next_current}\n",
-    "            )\n",
-    "\n",
-    "            OR (\n",
-    "\n",
-    "                p.VPACSA IN ('A','B','C','L')\n",
-    "\n",
-    "                AND p.VPADSA < {vpadsa_next_current}\n",
-    "            )\n",
-    "        )\n",
-    "\n",
-    "        AND p.IV00SA = 'B'\n",
-    "\n",
-    "        AND v.VPV1SV >= '000'\n",
-    "\n",
-    "        AND (\n",
-    "            v.VPV1SV < '750'\n",
-    "            OR v.VPV1SV > '755'\n",
-    "        )\n",
-    "\n",
-    "        -- WALLONIE FILTER\n",
-    "        AND p.PROVSA IN (4,5,6,7,12)\n",
-    "\n",
-    "        -- REMOVE OPT OUT\n",
-    "        AND s.EXIDSA IS NULL\n",
-    "    )\n",
-    ")\n",
-    "\n",
-    "SELECT\n",
-    "    EXID,\n",
-    "    PROVSA,\n",
-    "    VPV1SV,\n",
-    "    NAIDSA,\n",
-    "    OPT_OUT_FLAG\n",
-    "\n",
-    "FROM BASE\n",
-    "\n",
-    "WHERE RN = 1\n",
-    "\"\"\"\n",
-    "\n",
-    "print(\"\\nLoading optimized DB query...\")\n",
-    "\n",
-    "df = pd.read_sql(query, conn)\n",
-    "\n",
-    "df.columns = [str(c).upper() for c in df.columns]\n",
-    "\n",
-    "print(\"DB FINAL:\", len(df))\n",
-    "print(\"UNIQUE EXID:\", df[\"EXID\"].nunique())\n",
-    "\n",
-    "# ================================\n",
-    "# MEMORY OPTIMIZATION\n",
-    "# ================================\n",
-    "df[\"PROVSA\"] = pd.to_numeric(\n",
-    "    df[\"PROVSA\"],\n",
-    "    downcast=\"integer\"\n",
-    ")\n",
-    "\n",
-    "df[\"OPT_OUT_FLAG\"] = pd.to_numeric(\n",
-    "    df[\"OPT_OUT_FLAG\"],\n",
-    "    downcast=\"integer\"\n",
-    ")\n",
-    "\n",
-    "# ================================\n",
-    "# POP FILES\n",
-    "# ================================\n",
-    "pop_files = [\n",
-    "    r\"C:\\Users\\M509PSAO\\Desktop\\EXIDs\\P80_WLL_PARTENAMUT_2026_ENVOI.xlsx\",\n",
-    "    r\"C:\\Users\\M509PSAO\\Desktop\\EXIDs\\P20-80_WLL_PARTENAMUT_2026_ENVOI.xlsx\",\n",
-    "    r\"C:\\Users\\M509PSAO\\Desktop\\EXIDs\\P20_WLL_PARTENAMUT_2026_ENVOI.xlsx\"\n",
-    "]\n",
-    "\n",
-    "# ================================\n",
-    "# LOAD + APPEND FILES\n",
-    "# ================================\n",
-    "pop = pd.concat(\n",
-    "    [pd.read_excel(file, usecols=[\"EXID\"]) for file in pop_files],\n",
-    "    ignore_index=True\n",
-    ")\n",
-    "\n",
-    "pop.columns = [str(c).upper() for c in pop.columns]\n",
-    "\n",
-    "pop[\"EXID\"] = anatella_cast(pop[\"EXID\"])\n",
-    "\n",
-    "pop = pop.drop_duplicates(\"EXID\")\n",
-    "\n",
-    "print(\"POP TOTAL:\", len(pop))\n",
-    "print(\"POP UNIQUE EXID:\", pop[\"EXID\"].nunique())\n",
-    "\n",
-    "# ================================\n",
-    "# BASE\n",
-    "# ================================\n",
-    "base = pop.merge(\n",
-    "    df,\n",
-    "    on=\"EXID\",\n",
-    "    how=\"inner\"\n",
-    ")\n",
-    "\n",
-    "del pop\n",
-    "del df\n",
-    "gc.collect()\n",
-    "\n",
-    "print(\"BASE:\", len(base))\n",
-    "\n",
-    "# ================================\n",
-    "# BIRTH MONTH\n",
-    "# ================================\n",
-    "base[\"MOIS_NAISS\"] = (\n",
-    "    base[\"NAIDSA\"]\n",
-    "    .astype(str)\n",
-    "    .str[4:6]\n",
-    "    .astype(\"int8\")\n",
-    ")\n",
-    "\n",
-    "# ================================\n",
-    "# MYMUT (ENRICHMENT ONLY)\n",
-    "# ================================\n",
-    "mymut = pd.read_excel(\n",
-    "    r\"C:\\Users\\M509PSAO\\Desktop\\EXIDs\\Mymut_accounts_03.xlsx\",\n",
-    "    usecols=[\n",
-    "        \"EXTERNAL_ID\",\n",
-    "        \"MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT\"\n",
-    "    ]\n",
-    ")\n",
-    "\n",
-    "mymut = mymut[\n",
-    "    mymut[\"MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT\"] == 1\n",
-    "]\n",
-    "\n",
-    "mymut[\"EXTERNAL_ID\"] = anatella_cast(\n",
-    "    mymut[\"EXTERNAL_ID\"]\n",
-    ")\n",
-    "\n",
-    "mymut = mymut.drop_duplicates(\"EXTERNAL_ID\")\n",
-    "\n",
-    "print(\"MyMut count:\", len(mymut))\n",
-    "\n",
-    "base[\"EXID\"] = (\n",
-    "    base[\"EXID\"]\n",
-    "    .astype(str)\n",
-    "    .str.strip()\n",
-    ")\n",
-    "\n",
-    "mymut[\"EXTERNAL_ID\"] = (\n",
-    "    mymut[\"EXTERNAL_ID\"]\n",
-    "    .astype(str)\n",
-    "    .str.strip()\n",
-    ")\n",
-    "\n",
-    "base = base.merge(\n",
-    "    mymut[[\"EXTERNAL_ID\"]],\n",
-    "    left_on=\"EXID\",\n",
-    "    right_on=\"EXTERNAL_ID\",\n",
-    "    how=\"left\"\n",
-    ").drop(columns=[\"EXTERNAL_ID\"])\n",
-    "\n",
-    "del mymut\n",
-    "gc.collect()\n",
-    "\n",
-    "# ================================\n",
-    "# EBOX READ\n",
-    "# ================================\n",
-    "ebox_query = \"\"\"\n",
-    "SELECT DISTINCT\n",
-    "    BENEFICIARYEXID\n",
-    "\n",
-    "FROM ODS509.V_INF_ODS_DOCUMENT\n",
-    "\n",
-    "WHERE ORGANIZATION = '509'\n",
-    "AND \"READ\" = 1\n",
-    "AND OUTPUTCHANNELS = 'infobox'\n",
-    "AND READDATE >= ADD_MONTHS(CURRENT_DATE, -18)\n",
-    "AND READDATE < DATE '9999-01-01'\n",
-    "\"\"\"\n",
-    "\n",
-    "ebox_read = pd.read_sql(\n",
-    "    ebox_query,\n",
-    "    conn\n",
-    ")\n",
-    "\n",
-    "ebox_read[\"user_exid\"] = clean_exid(\n",
-    "    ebox_read[\"BENEFICIARYEXID\"]\n",
-    ")\n",
-    "\n",
-    "ebox_read[\"user_exid\"] = anatella_cast(\n",
-    "    ebox_read[\"user_exid\"]\n",
-    ")\n",
-    "\n",
-    "ebox_read[\"user_exid\"] = (\n",
-    "    ebox_read[\"user_exid\"]\n",
-    "    .apply(normalize_exid)\n",
-    "    .str.upper()\n",
-    ")\n",
-    "\n",
-    "ebox_read = ebox_read[\n",
-    "    [\"user_exid\"]\n",
-    "].drop_duplicates()\n",
-    "\n",
-    "print(\"READ count:\", len(ebox_read))\n",
-    "\n",
-    "# ================================\n",
-    "# NOT READ\n",
-    "# ================================\n",
-    "not_read_query = f\"\"\"\n",
-    "SELECT DISTINCT\n",
-    "    BENEFICIARYEXID\n",
-    "\n",
-    "FROM ODS509.V_INF_ODS_DOCUMENT\n",
-    "\n",
-    "WHERE ORGANIZATION = '509'\n",
-    "AND \"READ\" = 0\n",
-    "AND RECEIVEDATE BETWEEN TIMESTAMP '{start_ts}'\n",
-    "                     AND TIMESTAMP '{end_ts}'\n",
-    "AND NAME LIKE 'NMKTCBI%'\n",
-    "AND NOTIFICATIONREQUESTSTATUS = 'DELIVERED'\n",
-    "\"\"\"\n",
-    "\n",
-    "not_read = pd.read_sql(\n",
-    "    not_read_query,\n",
-    "    conn\n",
-    ")\n",
-    "\n",
-    "not_read[\"EXID\"] = clean_exid(\n",
-    "    not_read[\"BENEFICIARYEXID\"]\n",
-    ")\n",
-    "\n",
-    "not_read[\"EXID\"] = anatella_cast(\n",
-    "    not_read[\"EXID\"]\n",
-    ")\n",
-    "\n",
-    "not_read[\"EXID\"] = (\n",
-    "    not_read[\"EXID\"]\n",
-    "    .apply(normalize_exid)\n",
-    "    .str.upper()\n",
-    ")\n",
-    "\n",
-    "not_read = not_read[\n",
-    "    [\"EXID\"]\n",
-    "].drop_duplicates()\n",
-    "\n",
-    "print(\"NOT READ count:\", len(not_read))\n",
-    "\n",
-    "# ================================\n",
-    "# NORMALIZATION\n",
-    "# ================================\n",
-    "base[\"EXID\"] = (\n",
-    "    base[\"EXID\"]\n",
-    "    .apply(normalize_exid)\n",
-    "    .str.upper()\n",
-    ")\n",
-    "\n",
-    "# ================================\n",
-    "# VISITED / NOT VISITED\n",
-    "# ================================\n",
-    "ebox_active_exids = set(\n",
-    "    ebox_read[\"user_exid\"]\n",
-    ")\n",
-    "\n",
-    "visited = base[\n",
-    "    base[\"EXID\"].isin(ebox_active_exids)\n",
-    "].drop_duplicates(\"EXID\")\n",
-    "\n",
-    "not_visited = base[\n",
-    "    ~base[\"EXID\"].isin(ebox_active_exids)\n",
-    "].drop_duplicates(\"EXID\")\n",
-    "\n",
-    "# ================================\n",
-    "# MONTH FILTER\n",
-    "# ================================\n",
-    "visited_month = visited[\n",
-    "    visited[\"MOIS_NAISS\"] == data_month\n",
-    "][[\"EXID\"]]\n",
-    "\n",
-    "not_visited_month = not_visited[\n",
-    "    not_visited[\"MOIS_NAISS\"] == data_month\n",
-    "][[\"EXID\"]]\n",
-    "\n",
-    "print(\"NOT VISITED:\", len(not_visited_month))\n",
-    "print(\"VISITED:\", len(visited_month))\n",
-    "\n",
-    "# ================================\n",
-    "# FINAL LOGIC\n",
-    "# ================================\n",
-    "paper_send_total = pd.concat([\n",
-    "    not_visited_month,\n",
-    "    not_read\n",
-    "]).drop_duplicates(subset=[\"EXID\"])\n",
-    "\n",
-    "# ================================\n",
-    "# VALIDATION\n",
-    "# ================================\n",
-    "print(\"\\n================ VALIDATION ================\")\n",
-    "\n",
-    "print(\"BASE:\", len(base))\n",
-    "print(\"eBox send:\", len(visited_month))\n",
-    "print(\"Paper send:\", len(paper_send_total))\n",
-    "print(\"  -- NO EBOX:\", len(not_visited_month))\n",
-    "print(\"  -- NOT READ:\", len(not_read))\n",
-    "\n",
-    "# ================================\n",
-    "# EXPORT\n",
-    "# ================================\n",
-    "export_path = r\"C:\\Users\\M509PSAO\\Desktop\\EXIDs\"\n",
-    "\n",
-    "visited_month.to_excel(\n",
-    "    os.path.join(\n",
-    "        export_path,\n",
-    "        \"Wallonie_eBox_Send_April_2026.xlsx\"\n",
-    "    ),\n",
-    "    index=False\n",
-    ")\n",
-    "\n",
-    "paper_send_total.to_excel(\n",
-    "    os.path.join(\n",
-    "        export_path,\n",
-    "        \"Wallonie_Paper_Send_April_2026.xlsx\"\n",
-    "    ),\n",
-    "    index=False\n",
-    ")\n",
-    "\n",
-    "print(\"Export Wallonie completed successfully.\")\n",
-    "\n",
-    "# ================================\n",
-    "# CLOSE CONNECTION\n",
-    "# ================================\n",
-    "conn.close()"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": ".venv (3.11.9)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.11.9"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+# %%
+import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
+import pandas as pd
+import jaydebeapi
+import jpype
+import gc
+
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from dotenv import load_dotenv, find_dotenv
+
+import warnings
+warnings.filterwarnings("ignore")
+
+load_dotenv(find_dotenv())
+
+# ================================
+# CONFIG
+# ================================
+campaign_year = 2026
+campaign_month = 4
+
+data_date = datetime(
+    campaign_year,
+    campaign_month,
+    1
+) - relativedelta(months=1)
+
+data_month = data_date.month
+data_year = data_date.year
+
+start_of_month = datetime(data_year, data_month, 1)
+
+end_of_month = (
+    start_of_month
+    + relativedelta(months=1)
+    - relativedelta(days=1)
+)
+
+start_ts = start_of_month.strftime("%Y-%m-%d 00:00:00")
+end_ts = end_of_month.strftime("%Y-%m-%d 23:59:59")
+
+today = datetime.today()
+
+current_start = datetime(
+    today.year,
+    today.month,
+    1
+)
+
+current_end = (
+    current_start
+    + relativedelta(months=1)
+    - relativedelta(days=1)
+)
+
+current_next = (
+    current_start
+    + relativedelta(months=1)
+)
+
+vpodsa_date_current = current_end.strftime("%Y%m%d")
+vpadsa_next_current = current_next.strftime("%Y%m%d")
+
+print("\n================ CONFIG: Wallonie ================")
+print("Campaign month:", campaign_month)
+print("Data month:", data_month)
+print("DB snapshot month:", today.month)
+
+# ================================
+# HELPERS
+# ================================
+def anatella_cast(series):
+
+    return (
+        pd.to_numeric(series, errors="coerce")
+        .dropna()
+        .astype("int64")
+        .astype(str)
+    )
+
+def normalize_exid(x):
+
+    if pd.isna(x):
+        return None
+
+    try:
+        return str(int(str(x).strip()))
+    except:
+        return None
+
+def clean_exid(series):
+
+    return (
+        series.apply(
+            lambda x: ''.join(x) if isinstance(x, tuple) else str(x)
+        )
+        .str.strip()
+    )
+
+# ================================
+# CONNECTION
+# ================================
+def connect():
+
+    jar_path = r"C:\db2\db2jcc4.jar"
+
+    if not jpype.isJVMStarted():
+
+        jpype.startJVM(
+            jpype.getDefaultJVMPath(),
+            "-Xmx2g",
+            "-Djava.class.path=" + jar_path
+        )
+
+    conn = jaydebeapi.connect(
+        "com.ibm.db2.jcc.DB2Driver",
+        "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
+        ["m509psao", os.getenv("DB_PASSWORD")]
+    )
+
+    return conn
+
+conn = connect()
+
+# ================================
+# DB QUERY (OPTIMIZED)
+# ================================
+query = f"""
+WITH BASE AS (
+
+    SELECT
+
+        TRIM(p.EXIDSA) AS EXID,
+
+        SMALLINT(p.PROVSA) AS PROVSA,
+
+        v.VPV1SV,
+
+        p.NAIDSA,
+
+        SMALLINT(
+            CASE
+                WHEN s.EXIDSA IS NOT NULL THEN 1
+                ELSE 0
+            END
+        ) AS OPT_OUT_FLAG,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY p.EXIDSA
+            ORDER BY p.EXIDSA
+        ) AS RN
+
+    FROM ODS509.ODS_PSTATA p
+
+    LEFT JOIN ODS509.ODS_PSTATV v
+        ON p.EXIDSA = v.EXIDSV
+
+    LEFT JOIN (
+
+        SELECT DISTINCT
+            REPLACE(TARGETID, ',', '') AS EXIDSA
+
+        FROM ODS509.V_ISE_ODS_WWWSIGNAL
+
+        WHERE SIGNALID = 'CampagneCC'
+          AND INACTIVE = 0
+
+    ) s
+        ON p.EXIDSA = s.EXIDSA
+
+    WHERE (
+
+        p.VPODSA >= {vpodsa_date_current}
+
+        AND p.VPACSA <> 'O'
+
+        AND (
+            (
+                p.VPACSA = 'T'
+                AND p.VPADSA <= {vpadsa_next_current}
+            )
+
+            OR (
+
+                p.VPACSA IN ('A','B','C','L')
+
+                AND p.VPADSA < {vpadsa_next_current}
+            )
+        )
+
+        AND p.IV00SA = 'B'
+
+        AND v.VPV1SV >= '000'
+
+        AND (
+            v.VPV1SV < '750'
+            OR v.VPV1SV > '755'
+        )
+
+        -- WALLONIE FILTER
+        AND p.PROVSA IN (4,5,6,7,12)
+
+        -- REMOVE OPT OUT
+        AND s.EXIDSA IS NULL
+    )
+)
+
+SELECT
+    EXID,
+    PROVSA,
+    VPV1SV,
+    NAIDSA,
+    OPT_OUT_FLAG
+
+FROM BASE
+
+WHERE RN = 1
+"""
+
+print("\nLoading optimized DB query...")
+
+df = pd.read_sql(query, conn)
+
+df.columns = [str(c).upper() for c in df.columns]
+
+print("DB FINAL:", len(df))
+print("UNIQUE EXID:", df["EXID"].nunique())
+
+# ================================
+# MEMORY OPTIMIZATION
+# ================================
+df["PROVSA"] = pd.to_numeric(
+    df["PROVSA"],
+    downcast="integer"
+)
+
+df["OPT_OUT_FLAG"] = pd.to_numeric(
+    df["OPT_OUT_FLAG"],
+    downcast="integer"
+)
+
+# ================================
+# POP FILES
+# ================================
+pop_files = [
+    r"C:\Users\M509PSAO\Desktop\EXIDs\P80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
+    r"C:\Users\M509PSAO\Desktop\EXIDs\P20-80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
+    r"C:\Users\M509PSAO\Desktop\EXIDs\P20_WLL_PARTENAMUT_2026_ENVOI.xlsx"
+]
+
+# ================================
+# LOAD + APPEND FILES
+# ================================
+pop = pd.concat(
+    [pd.read_excel(file, usecols=["EXID"]) for file in pop_files],
+    ignore_index=True
+)
+
+pop.columns = [str(c).upper() for c in pop.columns]
+
+pop["EXID"] = anatella_cast(pop["EXID"])
+
+pop = pop.drop_duplicates("EXID")
+
+print("POP TOTAL:", len(pop))
+print("POP UNIQUE EXID:", pop["EXID"].nunique())
+
+# ================================
+# BASE
+# ================================
+base = pop.merge(
+    df,
+    on="EXID",
+    how="inner"
+)
+
+del pop
+del df
+gc.collect()
+
+print("BASE:", len(base))
+
+# ================================
+# BIRTH MONTH
+# ================================
+base["MOIS_NAISS"] = (
+    base["NAIDSA"]
+    .astype(str)
+    .str[4:6]
+    .astype("int8")
+)
+
+# ================================
+# MYMUT (ENRICHMENT ONLY)
+# ================================
+mymut = pd.read_excel(
+    r"C:\Users\M509PSAO\Desktop\EXIDs\Mymut_accounts_03.xlsx",
+    usecols=[
+        "EXTERNAL_ID",
+        "MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"
+    ]
+)
+
+mymut = mymut[
+    mymut["MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"] == 1
+]
+
+mymut["EXTERNAL_ID"] = anatella_cast(
+    mymut["EXTERNAL_ID"]
+)
+
+mymut = mymut.drop_duplicates("EXTERNAL_ID")
+
+print("MyMut count:", len(mymut))
+
+base["EXID"] = (
+    base["EXID"]
+    .astype(str)
+    .str.strip()
+)
+
+mymut["EXTERNAL_ID"] = (
+    mymut["EXTERNAL_ID"]
+    .astype(str)
+    .str.strip()
+)
+
+base = base.merge(
+    mymut[["EXTERNAL_ID"]],
+    left_on="EXID",
+    right_on="EXTERNAL_ID",
+    how="left"
+).drop(columns=["EXTERNAL_ID"])
+
+del mymut
+gc.collect()
+
+# ================================
+# EBOX READ
+# ================================
+ebox_query = """
+SELECT DISTINCT
+    BENEFICIARYEXID
+
+FROM ODS509.V_INF_ODS_DOCUMENT
+
+WHERE ORGANIZATION = '509'
+AND "READ" = 1
+AND OUTPUTCHANNELS = 'infobox'
+AND READDATE >= ADD_MONTHS(CURRENT_DATE, -18)
+AND READDATE < DATE '9999-01-01'
+"""
+
+ebox_read = pd.read_sql(
+    ebox_query,
+    conn
+)
+
+ebox_read["user_exid"] = clean_exid(
+    ebox_read["BENEFICIARYEXID"]
+)
+
+ebox_read["user_exid"] = anatella_cast(
+    ebox_read["user_exid"]
+)
+
+ebox_read["user_exid"] = (
+    ebox_read["user_exid"]
+    .apply(normalize_exid)
+    .str.upper()
+)
+
+ebox_read = ebox_read[
+    ["user_exid"]
+].drop_duplicates()
+
+print("READ count:", len(ebox_read))
+
+# ================================
+# NOT READ
+# ================================
+not_read_query = f"""
+SELECT DISTINCT
+    BENEFICIARYEXID
+
+FROM ODS509.V_INF_ODS_DOCUMENT
+
+WHERE ORGANIZATION = '509'
+AND "READ" = 0
+AND RECEIVEDATE BETWEEN TIMESTAMP '{start_ts}'
+                     AND TIMESTAMP '{end_ts}'
+AND NAME LIKE 'NMKTCBI%'
+AND NOTIFICATIONREQUESTSTATUS = 'DELIVERED'
+"""
+
+not_read = pd.read_sql(
+    not_read_query,
+    conn
+)
+
+not_read["EXID"] = clean_exid(
+    not_read["BENEFICIARYEXID"]
+)
+
+not_read["EXID"] = anatella_cast(
+    not_read["EXID"]
+)
+
+not_read["EXID"] = (
+    not_read["EXID"]
+    .apply(normalize_exid)
+    .str.upper()
+)
+
+not_read = not_read[
+    ["EXID"]
+].drop_duplicates()
+
+print("NOT READ count:", len(not_read))
+
+# ================================
+# NORMALIZATION
+# ================================
+base["EXID"] = (
+    base["EXID"]
+    .apply(normalize_exid)
+    .str.upper()
+)
+
+# ================================
+# VISITED / NOT VISITED
+# ================================
+ebox_active_exids = set(
+    ebox_read["user_exid"]
+)
+
+visited = base[
+    base["EXID"].isin(ebox_active_exids)
+].drop_duplicates("EXID")
+
+not_visited = base[
+    ~base["EXID"].isin(ebox_active_exids)
+].drop_duplicates("EXID")
+
+# ================================
+# MONTH FILTER
+# ================================
+visited_month = visited[
+    visited["MOIS_NAISS"] == data_month
+][["EXID"]]
+
+not_visited_month = not_visited[
+    not_visited["MOIS_NAISS"] == data_month
+][["EXID"]]
+
+print("NOT VISITED:", len(not_visited_month))
+print("VISITED:", len(visited_month))
+
+# ================================
+# FINAL LOGIC
+# ================================
+paper_send_total = pd.concat([
+    not_visited_month,
+    not_read
+]).drop_duplicates(subset=["EXID"])
+
+# ================================
+# VALIDATION
+# ================================
+print("\n================ VALIDATION ================")
+
+print("BASE:", len(base))
+print("eBox send:", len(visited_month))
+print("Paper send:", len(paper_send_total))
+print("  -- NO EBOX:", len(not_visited_month))
+print("  -- NOT READ:", len(not_read))
+
+# ================================
+# EXPORT
+# ================================
+export_path = r"C:\Users\M509PSAO\Desktop\EXIDs"
+
+visited_month.to_excel(
+    os.path.join(
+        export_path,
+        "Wallonie_eBox_Send_April_2026.xlsx"
+    ),
+    index=False
+)
+
+paper_send_total.to_excel(
+    os.path.join(
+        export_path,
+        "Wallonie_Paper_Send_April_2026.xlsx"
+    ),
+    index=False
+)
+
+print("Export Wallonie completed successfully.")
+
+# ================================
+# CLOSE CONNECTION
+# ================================
+conn.close()
+
+
