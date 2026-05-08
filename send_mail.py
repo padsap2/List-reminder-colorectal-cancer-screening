@@ -1,7 +1,9 @@
 print("STARTING MAIL SCRIPT")
 
 import os
-import win32com.client as win32
+import smtplib
+
+from email.message import EmailMessage
 from datetime import datetime
 
 # ================================
@@ -14,12 +16,18 @@ OUTPUT_FOLDER = os.path.join(
     "output_files"
 )
 
+SMTP_SERVER = "smtp.office365.com"
+SMTP_PORT = 587
+
+EMAIL_ADDRESS = os.environ.get("patrice.sapalo@partenamut.be")
+EMAIL_PASSWORD = os.environ.get("anderlecht!3")
+
 RECIPIENTS = [
     "patrice.sapalo@partenamut.be"
 ]
 
 # ================================
-# AUTO DATE
+# DATE
 # ================================
 today = datetime.today()
 
@@ -41,20 +49,19 @@ files = [
 ]
 
 # ================================
-# OUTLOOK
+# MAIL
 # ================================
-outlook = win32.Dispatch("Outlook.Application")
+msg = EmailMessage()
 
-mail = outlook.CreateItem(0)
-
-mail.To = ";".join(RECIPIENTS)
-
-mail.Subject = (
+msg["Subject"] = (
     f"CRC Screening Lists "
     f"{campaign_month:02d}/{campaign_year}"
 )
 
-mail.Body = f"""
+msg["From"] = EMAIL_ADDRESS
+msg["To"] = ",".join(RECIPIENTS)
+
+msg.set_content(f"""
 Hello,
 
 Please find attached the colorectal cancer screening files
@@ -68,10 +75,10 @@ Included:
 - Wallonie Paper
 
 Generated automatically.
-"""
+""")
 
 # ================================
-# ATTACH FILES
+# ATTACHMENTS
 # ================================
 for file in files:
 
@@ -82,7 +89,14 @@ for file in files:
 
     if os.path.exists(filepath):
 
-        mail.Attachments.Add(filepath)
+        with open(filepath, "rb") as f:
+
+            msg.add_attachment(
+                f.read(),
+                maintype="application",
+                subtype="octet-stream",
+                filename=file
+            )
 
         print(f"Attached: {file}")
 
@@ -95,6 +109,15 @@ for file in files:
 # ================================
 print("ABOUT TO SEND MAIL")
 
-mail.Send()
+with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
 
-print("MAIL SENT")
+    server.starttls()
+
+    server.login(
+        EMAIL_ADDRESS,
+        EMAIL_PASSWORD
+    )
+
+    server.send_message(msg)
+
+print("MAIL REALLY SENT")
