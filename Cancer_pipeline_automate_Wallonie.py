@@ -110,7 +110,7 @@ def connect():
     if not jpype.isJVMStarted():
 
         jpype.startJVM(
-            jpype.getDefaultJVMPath(),
+            r"C:\Program Files\temurin-jre-21\bin\server\jvm.dll",
             "-Xmx2g",
             "-Djava.class.path=" + jar_path
         )

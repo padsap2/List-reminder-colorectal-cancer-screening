@@ -72,7 +72,7 @@ def connect():
     jar_path = r"C:\db2\db2jcc4.jar"
     if not jpype.isJVMStarted():
         jpype.startJVM(
-            jpype.getDefaultJVMPath(),
+            r"C:\Program Files\temurin-jre-21\bin\server\jvm.dll",
             "-Xmx2g",
             "-Djava.class.path=" + jar_path
         )
