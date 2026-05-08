@@ -272,9 +272,9 @@ df["OPT_OUT_FLAG"] = pd.to_numeric(
 # POP FILES
 # ================================
 pop_files = [
-    r"C:\Users\M509PSAO\Desktop\EXIDs\P80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
-    r"C:\Users\M509PSAO\Desktop\EXIDs\P20-80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
-    r"C:\Users\M509PSAO\Desktop\EXIDs\P20_WLL_PARTENAMUT_2026_ENVOI.xlsx"
+    r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening\P80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
+    r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening\P20-80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
+    r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening\P20_WLL_PARTENAMUT_2026_ENVOI.xlsx"
 ]
 
 # ================================
@@ -333,51 +333,6 @@ base["MOIS_NAISS"] = (
     .str[4:6]
     .astype("int8")
 )
-
-# ================================
-# MYMUT (ENRICHMENT ONLY)
-# ================================
-mymut = pd.read_excel(
-    r"C:\Users\M509PSAO\Desktop\EXIDs\Mymut_accounts_03.xlsx",
-    usecols=[
-        "EXTERNAL_ID",
-        "MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"
-    ]
-)
-
-mymut = mymut[
-    mymut["MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"] == 1
-]
-
-mymut["EXTERNAL_ID"] = anatella_cast(
-    mymut["EXTERNAL_ID"]
-)
-
-mymut = mymut.drop_duplicates("EXTERNAL_ID")
-
-print("MyMut count:", len(mymut))
-
-base["EXID"] = (
-    base["EXID"]
-    .astype(str)
-    .str.strip()
-)
-
-mymut["EXTERNAL_ID"] = (
-    mymut["EXTERNAL_ID"]
-    .astype(str)
-    .str.strip()
-)
-
-base = base.merge(
-    mymut[["EXTERNAL_ID"]],
-    left_on="EXID",
-    right_on="EXTERNAL_ID",
-    how="left"
-).drop(columns=["EXTERNAL_ID"])
-
-del mymut
-gc.collect()
 
 # ================================
 # EBOX READ

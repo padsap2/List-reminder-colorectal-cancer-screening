@@ -249,7 +249,7 @@ print("DB FINAL:", len(df))
 # POP
 # ================================
 pop = pd.read_excel(
-    r"C:\Users\M509PSAO\Desktop\EXIDs\POP_ELIGIBLE_PARTENAMUT_2026_NEW.xlsx"
+    r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening\POP_ELIGIBLE_PARTENAMUT_2026_NEW.xlsx"
 )
 
 pop["EXID"] = anatella_cast(
@@ -312,47 +312,6 @@ base["MOIS_NAISS"] = (
     .astype(int)
 )
 
-# ================================
-# MYMUT
-# ================================
-mymut = pd.read_excel(
-    r"C:\Users\M509PSAO\Desktop\EXIDs\Mymut_accounts_03.xlsx",
-    usecols=[
-        "EXTERNAL_ID",
-        "MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"
-    ]
-)
-
-mymut = mymut[
-    mymut["MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"] == 1
-]
-
-mymut["EXTERNAL_ID"] = anatella_cast(
-    mymut["EXTERNAL_ID"]
-)
-
-mymut = mymut.drop_duplicates("EXTERNAL_ID")
-
-print("Mymut count:", len(mymut))
-
-base["EXID"] = (
-    base["EXID"]
-    .astype(str)
-    .str.strip()
-)
-
-mymut["EXTERNAL_ID"] = (
-    mymut["EXTERNAL_ID"]
-    .astype(str)
-    .str.strip()
-)
-
-base = base.merge(
-    mymut[["EXTERNAL_ID"]],
-    left_on="EXID",
-    right_on="EXTERNAL_ID",
-    how="left"
-).drop(columns=["EXTERNAL_ID"])
 
 # ================================
 # EBOX READ
@@ -493,7 +452,7 @@ print("  -- NOT READ:", len(not_read))
 # ================================
 # EXPORT
 # ================================
-export_path = r"C:\Users\M509PSAO\Desktop\EXIDs"
+export_path = r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening"
 
 visited_month.to_excel(
     os.path.join(
