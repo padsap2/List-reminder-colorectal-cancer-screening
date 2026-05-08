@@ -16,9 +16,9 @@ warnings.filterwarnings("ignore")
 
 load_dotenv(find_dotenv())
 
-# ================================
+# ================================#
 # CONFIG
-# ================================
+# ================================#
 campaign_year = 2026
 campaign_month = 4
 
@@ -69,9 +69,9 @@ print("Campaign month:", campaign_month)
 print("Data month:", data_month)
 print("DB snapshot month:", today.month)
 
-# ================================
+# ================================#
 # HELPERS
-# ================================
+# ================================#
 def anatella_cast(series):
 
     return (
@@ -100,9 +100,10 @@ def clean_exid(series):
         .str.strip()
     )
 
-# ================================
+# ================================#
 # CONNECTION
-# ================================
+# ================================#
+
 def connect():
 
     jar_path = r"C:\db2\db2jcc4.jar"
@@ -120,24 +121,25 @@ def connect():
     if not jpype.isJVMStarted():
 
         jpype.startJVM(
-            java_home + r"\bin\server\jvm.dll",
+            jpype.getDefaultJVMPath(),
             "-Xmx2g",
-            "-Djava.class.path=" + jar_path
+            f"-Djava.class.path={jar_path}"
         )
 
     conn = jaydebeapi.connect(
         "com.ibm.db2.jcc.DB2Driver",
         "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
-        ["m509psao", os.getenv("DB_PASSWORD")]
+        ["m509psao", os.getenv("DB_PASSWORD")],
+        jar_path
     )
 
     return conn
 
 conn = connect()
 
-# ================================
+# ================================#
 # DB QUERY (OPTIMIZED)
-# ================================
+# ================================#
 query = f"""
 WITH BASE AS (
 
@@ -239,9 +241,9 @@ df.columns = [str(c).upper() for c in df.columns]
 print("DB FINAL:", len(df))
 print("UNIQUE EXID:", df["EXID"].nunique())
 
-# ================================
+# ================================#
 # MEMORY OPTIMIZATION
-# ================================
+# ================================#
 df["PROVSA"] = pd.to_numeric(
     df["PROVSA"],
     downcast="integer"
@@ -252,18 +254,18 @@ df["OPT_OUT_FLAG"] = pd.to_numeric(
     downcast="integer"
 )
 
-# ================================
+# ================================#
 # POP FILES
-# ================================
+# ================================#
 pop_files = [
     r"C:\Users\M509PSAO\Desktop\EXIDs\P80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
     r"C:\Users\M509PSAO\Desktop\EXIDs\P20-80_WLL_PARTENAMUT_2026_ENVOI.xlsx",
     r"C:\Users\M509PSAO\Desktop\EXIDs\P20_WLL_PARTENAMUT_2026_ENVOI.xlsx"
 ]
 
-# ================================
+# ================================#
 # LOAD + APPEND FILES
-# ================================
+# ================================#
 pop = pd.concat(
     [
         pd.read_excel(file, usecols=["EXID"])
@@ -281,9 +283,9 @@ pop = pop.drop_duplicates("EXID")
 print("POP TOTAL:", len(pop))
 print("POP UNIQUE EXID:", pop["EXID"].nunique())
 
-# ================================
+# ================================#
 # BASE
-# ================================
+# ================================#
 base = pop.merge(
     df,
     on="EXID",
@@ -296,9 +298,9 @@ gc.collect()
 
 print("BASE:", len(base))
 
-# ================================
+# ================================#
 # BIRTH MONTH
-# ================================
+# ================================#
 base["MOIS_NAISS"] = (
     base["NAIDSA"]
     .astype(str)
@@ -306,9 +308,9 @@ base["MOIS_NAISS"] = (
     .astype("int8")
 )
 
-# ================================
+# ================================#
 # MYMUT (ENRICHMENT ONLY)
-# ================================
+# ================================#
 mymut = pd.read_excel(
     r"C:\Users\M509PSAO\Desktop\EXIDs\Mymut_accounts_03.xlsx",
     usecols=[
@@ -351,9 +353,9 @@ base = base.merge(
 del mymut
 gc.collect()
 
-# ================================
+# ================================#
 # EBOX READ
-# ================================
+# ================================#
 ebox_query = """
 SELECT DISTINCT
     BENEFICIARYEXID
@@ -392,9 +394,9 @@ ebox_read = ebox_read[
 
 print("READ count:", len(ebox_read))
 
-# ================================
+# ================================#
 # NOT READ
-# ================================
+# ================================#
 not_read_query = f"""
 SELECT DISTINCT
     BENEFICIARYEXID
@@ -434,18 +436,18 @@ not_read = not_read[
 
 print("NOT READ count:", len(not_read))
 
-# ================================
+# ================================#
 # NORMALIZATION
-# ================================
+# ================================#
 base["EXID"] = (
     base["EXID"]
     .apply(normalize_exid)
     .str.upper()
 )
 
-# ================================
+# ================================#
 # VISITED / NOT VISITED
-# ================================
+# ================================#
 ebox_active_exids = set(
     ebox_read["user_exid"]
 )
@@ -458,9 +460,9 @@ not_visited = base[
     ~base["EXID"].isin(ebox_active_exids)
 ].drop_duplicates("EXID")
 
-# ================================
+# ================================#
 # MONTH FILTER
-# ================================
+# ================================#
 visited_month = visited[
     visited["MOIS_NAISS"] == data_month
 ][["EXID"]]
@@ -472,17 +474,17 @@ not_visited_month = not_visited[
 print("NOT VISITED:", len(not_visited_month))
 print("VISITED:", len(visited_month))
 
-# ================================
+# ================================#
 # FINAL LOGIC
-# ================================
+# ================================#
 paper_send_total = pd.concat([
     not_visited_month,
     not_read
 ]).drop_duplicates(subset=["EXID"])
 
-# ================================
+# ================================#
 # VALIDATION
-# ================================
+# ================================#
 print("\n================ VALIDATION ================")
 
 print("BASE:", len(base))
@@ -491,9 +493,9 @@ print("Paper send:", len(paper_send_total))
 print("  -- NO EBOX:", len(not_visited_month))
 print("  -- NOT READ:", len(not_read))
 
-# ================================
+# ================================#
 # EXPORT
-# ================================
+# ================================#
 export_path = r"C:\Users\M509PSAO\Desktop\EXIDs"
 
 visited_month.to_excel(
@@ -512,9 +514,11 @@ paper_send_total.to_excel(
     index=False
 )
 
+
 print("Export Wallonie completed successfully.")
 
-# ================================
+# ================================#
 # CLOSE CONNECTION
-# ================================
+# ================================#
+
 conn.close()

@@ -114,18 +114,20 @@ def connect():
     if not jpype.isJVMStarted():
 
         jpype.startJVM(
-            java_home + r"\bin\server\jvm.dll",
+            jpype.getDefaultJVMPath(),
             "-Xmx2g",
-            "-Djava.class.path=" + jar_path
+            f"-Djava.class.path={jar_path}"
         )
 
     conn = jaydebeapi.connect(
         "com.ibm.db2.jcc.DB2Driver",
         "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
-        ["m509psao", os.getenv("DB_PASSWORD")]
+        ["m509psao", os.getenv("DB_PASSWORD")],
+        jar_path
     )
 
     return conn
+
 
 conn = connect()
 
@@ -485,7 +487,7 @@ paper_send_total.to_excel(
 
 print("Export completed successfully.")
 
-# ================================
+# ================================#
 # CLOSE CONNECTION
-# ================================
+# ================================#
 conn.close()
