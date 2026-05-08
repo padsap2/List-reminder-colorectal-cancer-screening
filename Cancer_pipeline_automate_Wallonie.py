@@ -1,4 +1,3 @@
-# %%
 import os
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
@@ -17,20 +16,22 @@ warnings.filterwarnings("ignore")
 load_dotenv(find_dotenv())
 
 # ================================
-# CONFIG
+# AUTO CONFIG
 # ================================
-campaign_year = 2026
-campaign_month = 4
+today = datetime.today()
 
-data_date = datetime(
-    campaign_year,
-    campaign_month,
-    1
-) - relativedelta(months=1)
+campaign_year = today.year
+campaign_month = today.month
+
+# Previous month
+data_date = today - relativedelta(months=1)
 
 data_month = data_date.month
 data_year = data_date.year
 
+# ================================
+# PERIODS
+# ================================
 start_of_month = datetime(data_year, data_month, 1)
 
 end_of_month = (
@@ -41,8 +42,6 @@ end_of_month = (
 
 start_ts = start_of_month.strftime("%Y-%m-%d 00:00:00")
 end_ts = end_of_month.strftime("%Y-%m-%d 23:59:59")
-
-today = datetime.today()
 
 current_start = datetime(
     today.year,
@@ -95,14 +94,16 @@ def clean_exid(series):
 
     return (
         series.apply(
-            lambda x: ''.join(x) if isinstance(x, tuple) else str(x)
+            lambda x: ''.join(x)
+            if isinstance(x, tuple)
+            else str(x)
         )
         .str.strip()
     )
 
-# ================================#
+# ================================
 # CONNECTION
-# ================================#
+# ================================
 def connect():
 
     jar_path = os.path.join(
@@ -125,6 +126,7 @@ def connect():
     )
 
     if not os.path.exists(jar_path):
+
         raise FileNotFoundError(
             f"DB2 driver not found at: {jar_path}"
         )
@@ -142,12 +144,11 @@ def connect():
     conn = jaydebeapi.connect(
         "com.ibm.db2.jcc.DB2Driver",
         "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
-        ["m509psao", "Oong)ieVoh1W"],
+        ["m509psao", os.getenv("DB_PASSWORD")],
         jars=jar_path
     )
 
     return conn
-
 
 conn = connect()
 
@@ -281,16 +282,15 @@ pop_files = [
 # LOAD + APPEND FILES
 # ================================
 pop = pd.concat(
-    [
-        pd.read_excel(file, usecols=["EXID"])
-        for file in pop_files
-    ],
+    [pd.read_excel(file, usecols=["EXID"]) for file in pop_files],
     ignore_index=True
 )
 
 pop.columns = [str(c).upper() for c in pop.columns]
 
-pop["EXID"] = anatella_cast(pop["EXID"])
+pop["EXID"] = anatella_cast(
+    pop["EXID"]
+)
 
 pop = pop.drop_duplicates("EXID")
 
@@ -300,18 +300,6 @@ print("POP UNIQUE EXID:", pop["EXID"].nunique())
 # ================================
 # BASE
 # ================================
-df["EXID"] = (
-    df["EXID"]
-    .astype(str)
-    .str.strip()
-)
-
-pop["EXID"] = (
-    pop["EXID"]
-    .astype(str)
-    .str.strip()
-)
-
 base = pop.merge(
     df,
     on="EXID",
@@ -333,6 +321,51 @@ base["MOIS_NAISS"] = (
     .str[4:6]
     .astype("int8")
 )
+
+# ================================
+# MYMUT (ENRICHMENT ONLY)
+# ================================
+mymut = pd.read_excel(
+    r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening\Mymut_accounts_03.xlsx",
+    usecols=[
+        "EXTERNAL_ID",
+        "MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"
+    ]
+)
+
+mymut = mymut[
+    mymut["MMT_HAS_MYMUT_ACCOUNT_ISACTIVE_CNT"] == 1
+]
+
+mymut["EXTERNAL_ID"] = anatella_cast(
+    mymut["EXTERNAL_ID"]
+)
+
+mymut = mymut.drop_duplicates("EXTERNAL_ID")
+
+print("MyMut count:", len(mymut))
+
+base["EXID"] = (
+    base["EXID"]
+    .astype(str)
+    .str.strip()
+)
+
+mymut["EXTERNAL_ID"] = (
+    mymut["EXTERNAL_ID"]
+    .astype(str)
+    .str.strip()
+)
+
+base = base.merge(
+    mymut[["EXTERNAL_ID"]],
+    left_on="EXID",
+    right_on="EXTERNAL_ID",
+    how="left"
+).drop(columns=["EXTERNAL_ID"])
+
+del mymut
+gc.collect()
 
 # ================================
 # EBOX READ
@@ -482,7 +515,7 @@ export_path = r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colo
 visited_month.to_excel(
     os.path.join(
         export_path,
-        "Wallonie_eBox_Send_April_2026.xlsx"
+        f"Wallonie_eBox_Send_{campaign_month:02d}_{campaign_year}.xlsx"
     ),
     index=False
 )
@@ -490,7 +523,7 @@ visited_month.to_excel(
 paper_send_total.to_excel(
     os.path.join(
         export_path,
-        "Wallonie_Paper_Send_April_2026.xlsx"
+        f"Wallonie_Paper_Send_{campaign_month:02d}_{campaign_year}.xlsx"
     ),
     index=False
 )

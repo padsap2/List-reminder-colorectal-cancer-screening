@@ -1,4 +1,3 @@
-# %%
 import os
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
@@ -15,20 +14,23 @@ warnings.filterwarnings("ignore")
 
 load_dotenv(find_dotenv())
 
-# ================================#
-# CONFIG
-# ================================#
-campaign_year = 2026
-campaign_month = 4
+# ================================
+# AUTO CONFIG
+# ================================
+today = datetime.today()
 
-data_date = (
-    datetime(campaign_year, campaign_month, 1)
-    - relativedelta(months=1)
-)
+campaign_year = today.year
+campaign_month = today.month
+
+# Previous month
+data_date = today - relativedelta(months=1)
 
 data_month = data_date.month
 data_year = data_date.year
 
+# ================================
+# PERIODS
+# ================================
 start_of_month = datetime(data_year, data_month, 1)
 
 end_of_month = (
@@ -39,8 +41,6 @@ end_of_month = (
 
 start_ts = start_of_month.strftime("%Y-%m-%d 00:00:00")
 end_ts = end_of_month.strftime("%Y-%m-%d 23:59:59")
-
-today = datetime.today()
 
 current_start = datetime(today.year, today.month, 1)
 
@@ -63,9 +63,9 @@ print("Campaign month:", campaign_month)
 print("Data month:", data_month)
 print("DB snapshot month:", today.month)
 
-# ================================#
+# ================================
 # HELPERS
-# ================================#
+# ================================
 def anatella_cast(series):
 
     return (
@@ -89,7 +89,9 @@ def clean_exid(series):
 
     return (
         series.apply(
-            lambda x: ''.join(x) if isinstance(x, tuple) else str(x)
+            lambda x: ''.join(x)
+            if isinstance(x, tuple)
+            else str(x)
         )
         .str.strip()
     )
@@ -119,6 +121,7 @@ def connect():
     )
 
     if not os.path.exists(jar_path):
+
         raise FileNotFoundError(
             f"DB2 driver not found at: {jar_path}"
         )
@@ -136,12 +139,11 @@ def connect():
     conn = jaydebeapi.connect(
         "com.ibm.db2.jcc.DB2Driver",
         "jdbc:db2://s998lp1dbbi01.jablux.cpc998.be:50004/ods500",
-        ["m509psao", "Oong)ieVoh1W"],
+        ["m509psao", os.getenv("DB_PASSWORD")],
         jars=jar_path
     )
 
     return conn
-
 
 conn = connect()
 
@@ -202,6 +204,8 @@ WHERE (
 )
 """
 
+print("\nLoading DB query...")
+
 df = pd.read_sql(query, conn)
 
 df.columns = [str(c).upper() for c in df.columns]
@@ -244,6 +248,7 @@ df = df.groupby(
 })
 
 print("DB FINAL:", len(df))
+print("UNIQUE EXID:", df["EXID"].nunique())
 
 # ================================
 # POP
@@ -252,11 +257,15 @@ pop = pd.read_excel(
     r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colorectal cancer screening\POP_ELIGIBLE_PARTENAMUT_2026_NEW.xlsx"
 )
 
+pop.columns = [str(c).upper() for c in pop.columns]
+
 pop["EXID"] = anatella_cast(
     pop["EXID"]
 )
 
-pop = pop.drop_duplicates("EXID")
+pop = pop.drop_duplicates(
+    subset=["EXID"]
+)
 
 print("POP:", len(pop))
 
@@ -281,8 +290,22 @@ base = pop.merge(
     how="inner"
 )
 
+print("BASE:", len(base))
+
 # ================================
-# FILTERS
+# OPT OUT COUNT
+# ================================
+opted_out_count = (
+    pd.to_numeric(
+        base["OPT_OUT_FLAG"],
+        errors="coerce"
+    ) == 1
+).sum()
+
+print("OPTED OUT MEMBERS:", opted_out_count)
+
+# ================================
+# FILTER BRUSSELS
 # ================================
 base = base[
 
@@ -303,15 +326,21 @@ base = base[
     )
 ]
 
-print("BASE FILTERED:", len(base))
+print(
+    "BASE FILTERED "
+    "(after opt out + province filter):",
+    len(base)
+)
 
+# ================================
+# MONTH OF BIRTH
+# ================================
 base["MOIS_NAISS"] = (
     base["NAIDSA"]
     .astype(str)
     .str[4:6]
     .astype(int)
 )
-
 
 # ================================
 # EBOX READ
@@ -444,6 +473,7 @@ paper_send_total = pd.concat([
 print("\n================ VALIDATION ================")
 
 print("BASE:", len(base))
+print("OPTED OUT:", opted_out_count)
 print("eBox send:", len(visited_month))
 print("Paper send:", len(paper_send_total))
 print("  -- NO EBOX:", len(not_visited_month))
@@ -457,7 +487,7 @@ export_path = r"G:\Studies\Cellule Etudes\Reporting\Marketing\List reminder colo
 visited_month.to_excel(
     os.path.join(
         export_path,
-        "Bruxelles_eBox_Send_April_2026.xlsx"
+        f"Brussels_eBox_Send_{campaign_month:02d}_{campaign_year}.xlsx"
     ),
     index=False
 )
@@ -465,12 +495,12 @@ visited_month.to_excel(
 paper_send_total.to_excel(
     os.path.join(
         export_path,
-        "Bruxelles_Paper_Send_April_2026.xlsx"
+        f"Brussels_Paper_Send_{campaign_month:02d}_{campaign_year}.xlsx"
     ),
     index=False
 )
 
-print("Export completed successfully.")
+print("\nExport Brussels completed successfully.")
 
 # ================================#
 # CLOSE CONNECTION
