@@ -153,7 +153,7 @@ def connect():
 conn = connect()
 
 # ================================
-# DB QUERY (OPTIMIZED)
+# DB QUERY
 # ================================
 query = f"""
 WITH BASE AS (
@@ -229,9 +229,6 @@ WITH BASE AS (
 
         -- WALLONIE FILTER
         AND p.PROVSA IN (4,5,6,7,12)
-
-        -- REMOVE OPT OUT
-        AND s.EXIDSA IS NULL
     )
 )
 
@@ -324,7 +321,21 @@ opted_out_count = (
 
 print("OPTED OUT MEMBERS:", opted_out_count)
 
+# ================================
+# REMOVE OPT OUT
+# ================================
+base = base[
+    pd.to_numeric(
+        base["OPT_OUT_FLAG"],
+        errors="coerce"
+    ) == 0
+]
 
+print(
+    "BASE FILTERED "
+    "(after opt out filter):",
+    len(base)
+)
 
 # ================================
 # BIRTH MONTH
