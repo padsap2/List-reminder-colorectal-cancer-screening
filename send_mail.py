@@ -1,9 +1,8 @@
 print("STARTING MAIL SCRIPT")
 
 import os
-import smtplib
+import win32com.client as win32
 
-from email.message import EmailMessage
 from datetime import datetime
 
 # ================================
@@ -13,12 +12,6 @@ OUTPUT_FOLDER = (
     r"G:\Studies\Cellule Etudes\Reporting\Marketing"
     r"\List reminder colorectal cancer screening"
 )
-
-SMTP_SERVER = "smtp.office365.com"
-SMTP_PORT = 587
-
-EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 
 RECIPIENTS = [
     "patrice.sapalo@partenamut.be"
@@ -47,19 +40,22 @@ files = [
 ]
 
 # ================================
-# MAIL
+# OUTLOOK
 # ================================
-msg = EmailMessage()
+print("OPENING OUTLOOK")
 
-msg["Subject"] = (
+outlook = win32.Dispatch("Outlook.Application")
+
+mail = outlook.CreateItem(0)
+
+mail.To = ";".join(RECIPIENTS)
+
+mail.Subject = (
     f"CRC Screening Lists "
     f"{campaign_month:02d}/{campaign_year}"
 )
 
-msg["From"] = EMAIL_ADDRESS
-msg["To"] = ",".join(RECIPIENTS)
-
-msg.set_content(f"""
+mail.Body = f"""
 Hello,
 
 Please find attached the colorectal cancer screening files
@@ -73,7 +69,7 @@ Included:
 - Wallonie Paper
 
 Generated automatically.
-""")
+"""
 
 # ================================
 # ATTACHMENTS
@@ -87,14 +83,7 @@ for file in files:
 
     if os.path.exists(filepath):
 
-        with open(filepath, "rb") as f:
-
-            msg.add_attachment(
-                f.read(),
-                maintype="application",
-                subtype="octet-stream",
-                filename=file
-            )
+        mail.Attachments.Add(filepath)
 
         print(f"Attached: {file}")
 
@@ -105,17 +94,8 @@ for file in files:
 # ================================
 # SEND
 # ================================
-print("ABOUT TO SEND MAIL")
+print("SENDING MAIL")
 
-with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=60) as server:
+mail.Send()
 
-    server.starttls()
-
-    server.login(
-        EMAIL_ADDRESS,
-        EMAIL_PASSWORD
-    )
-
-    server.send_message(msg)
-
-print("MAIL REALLY SENT")
+print("MAIL SENT SUCCESSFULLY")
